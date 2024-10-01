@@ -6,29 +6,15 @@ from transformers import AutoTokenizer
 
 from userdef import UserDef as BaseUserDef
 
-try:
-    max_tokens = int(os.environ.get("MAX_TOKENS"))
-except (TypeError, ValueError):
-    max_tokens = 512
-
-print(f"max_tokens set to {max_tokens}")
-
+max_tokens = 128
 tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-8B-Instruct")
 
 default_system_prompt = """You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.
 
 If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."""
 
-if os.environ.get("SYSTEM_PROMPT") == "1":
-    system_prompt = default_system_prompt
-    system_prompt_file = os.environ.get("SYSTEM_PROMPT_FILE")
-    if system_prompt_file is not None:
-        with open(system_prompt_file) as f:
-            system_prompt = f.read().strip()
-else:
-    system_prompt = ""
-
-base_url = os.environ.get("BASE_URL", "http://localhost:3000")
+system_prompt = default_system_prompt if os.environ.get("SYSTEM_PROMPT") == "1" else ""
+base_url = os.environ.get("BASE_URL", "http://localhost:3030")
 
 
 @functools.lru_cache(maxsize=8)
@@ -79,39 +65,25 @@ class UserDef(BaseUserDef):
 
         prompt = random.choice(cls.PROMPTS)
         headers = {"Content-Type": "application/json"}
-        url = f"{cls.BASE_URL}/v1/chat/completions"
+        url = f"{cls.BASE_URL}/v2/models/ensemble/generate_stream"
         data = {
-            "messages": [
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            "max_tokens": max_tokens,
-            "model": "vllm-model-meta-llama-3-8b--e0hxnx4j0",
-            "temperature": 0.7,
-            "stream": True
+            "text_input": prompt,
+            "max_tokens": max_tokens
+            #"parameters": {"stream": True}
         }
         return url, headers, json.dumps(data)
 
     @staticmethod
     def parse_response(chunk: bytes):
         import json
-        #text = chunk.decode("utf-8").strip()
-        #print(text)
         text = chunk.decode("utf-8").strip()
         #print(text)
-
         data = text[6:]
         if data.startswith("[DONE]") or len(data) == 0:
             return []
-        d = eval(data.replace("null", "None"))
+        d = eval(data.replace("null", "None").replace("false","False").replace("true", "True"))
         #print(d)
-        content = d['choices'][0]["delta"]["content"]
+        content = d['text_output']
         print("Content:", content)
         if not content:
             return []
