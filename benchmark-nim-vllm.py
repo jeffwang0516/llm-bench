@@ -6,8 +6,14 @@ from transformers import AutoTokenizer
 
 from userdef import UserDef as BaseUserDef
 
-max_tokens = 128
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-8B-Instruct")
+try:
+    max_tokens = int(os.environ.get("MAX_TOKENS"))
+except (TypeError, ValueError):
+    max_tokens = 128
+print(f"max_tokens set to {max_tokens}")
+
+
+tokenizer = AutoTokenizer.from_pretrained(os.environ.get("TOKENIZER", "meta-llama/Meta-Llama-3-8B-Instruct"))
 
 default_system_prompt = """You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.
 
@@ -15,7 +21,7 @@ If a question does not make any sense, or is not factually coherent, explain why
 
 system_prompt = default_system_prompt if os.environ.get("SYSTEM_PROMPT") == "1" else ""
 base_url = os.environ.get("BASE_URL", "http://localhost:3000")
-
+model = os.environ.get("MODEL", "vllm-model-meta-llama-3-8b--e0hxnx4j0")
 
 @functools.lru_cache(maxsize=8)
 def get_prompt_set(min_input_length=0, max_input_length=500):
@@ -78,9 +84,7 @@ class UserDef(BaseUserDef):
                 }
             ],
             "max_tokens": max_tokens,
-            "model": "meta/llama3-8b-instruct",
-            #"model": "vllm-model-meta-llama-3-8b--e0hxnx4j0",
-            #"temperature": 0.7,
+            "model": model,
             "stream": True
         }
         return url, headers, json.dumps(data)
@@ -100,7 +104,7 @@ class UserDef(BaseUserDef):
         #print(d)
         delta = d['choices'][0]["delta"]
         content = delta.get('content')
-        print("Content:", content)
+        #print("Content:", content)
         if not content:
             return []
         return tokenizer.encode(content, add_special_tokens=False)
@@ -113,7 +117,7 @@ if __name__ == "__main__":
     # arg parsing
     parser = argparse.ArgumentParser(description="Benchmark")
     parser.add_argument("--max_users", type=int, required=True)
-    parser.add_argument("--session_time", type=float, default=None)
+    parser.add_argument("--session_time", type=float, default=60)
     parser.add_argument("--ping_correction", action="store_true")
     args = parser.parse_args()
 
